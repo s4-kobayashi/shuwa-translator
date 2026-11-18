@@ -87,9 +87,7 @@ export function createRecognizer(initial = {}) {
       (acc, v, i) => acc + Math.max(0, Math.abs(v - b.e[i]) - 0.04),
       0,
     );
-    return (
-      (planar + DEPTH_WEIGHT * depth + SHAPE_WEIGHT * shape) / (dt / 1000)
-    );
+    return (planar + DEPTH_WEIGHT * depth + SHAPE_WEIGHT * shape) / (dt / 1000);
   }
 
   function motionEnergy() {
@@ -97,7 +95,11 @@ export function createRecognizer(initial = {}) {
     if (n < 2 * ENERGY_AVG) return 0;
     const A = history.slice(n - ENERGY_AVG);
     let j = n - ENERGY_AVG;
-    while (j > ENERGY_AVG && history[n - 1].t - history[j - 1].t < ENERGY_WINDOW_MS) j--;
+    while (
+      j > ENERGY_AVG &&
+      history[n - 1].t - history[j - 1].t < ENERGY_WINDOW_MS
+    )
+      j--;
     const B = history.slice(j - ENERGY_AVG, j);
     if (B.length < ENERGY_AVG) return 0;
     const tm = (fs) => fs.reduce((a, f) => a + f.t, 0) / fs.length;
@@ -283,6 +285,7 @@ export function createRecognizer(initial = {}) {
       type: "scores",
       channel: "motion",
       top: cands.slice(0, 4).map((c) => ({ label: c.label, score: c.score })),
+      seg: s, // segment summary, for diagnosing a decision (not copied)
     });
     if (
       !best ||

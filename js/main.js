@@ -293,6 +293,7 @@ function setStatus(msg, important = false) {
 }
 
 let lastVideoTime = -1;
+let featureLog = null; // test mode: per-frame features for offline evaluation
 function loop() {
   if (!running) return;
   schedule();
@@ -326,6 +327,7 @@ function loop() {
     dominant: prefs.dominant,
     t: now - sessionT0,
   });
+  if (featureLog) featureLog.push({ ...f, vt: video.currentTime });
   handleEvents(rec.push(f));
 }
 function schedule() {
@@ -915,6 +917,15 @@ if (TEST) {
     },
     releaseFeed() {
       injected = false;
+    },
+    /** Log the feature frame of every camera frame (with video.currentTime as vt). */
+    logFeatures() {
+      featureLog = [];
+    },
+    takeFeatures() {
+      const out = featureLog || [];
+      featureLog = null;
+      return out;
     },
     state: () => ({
       running,

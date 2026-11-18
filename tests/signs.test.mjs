@@ -9,6 +9,7 @@ import {
   modifierFor,
   reversals,
   WORD_RULES,
+  all,
 } from "../js/signs.js";
 import {
   WORD_MOVES,
@@ -91,28 +92,46 @@ test("reversals counts oscillation half-cycles and ignores small jitter", () => 
   assert.equal(reversals(ramp, 0.1), 0);
 });
 
-test('a two-handed word is not read as a moving kana (挨拶 ≠ の)', () => {
-  const s = summarize(WORD_MOVES['挨拶']());
+test("a two-handed word is not read as a moving kana (挨拶 ≠ の)", () => {
+  const s = summarize(WORD_MOVES["挨拶"]());
   const kana = scoreMotionKana(s)[0];
-  const word = scoreWords(s, 'motion')[0];
-  assert.equal(word.label, '挨拶');
+  const word = scoreWords(s, "motion")[0];
+  assert.equal(word.label, "挨拶");
   assert.ok(kana.score < 0.4, `${kana.label} ${kana.score}`);
 });
 
-test('a moving kana still reads with the other hand resting low', async () => {
-  const { movement } = await import('./testkit/frames.mjs');
-  const rest = { shape: 'flat', orient: 'palmDown', at: { x: -0.2, y: -1.1 } };
+test("a moving kana still reads with the other hand resting low", async () => {
+  const { movement } = await import("./testkit/frames.mjs");
+  const rest = { shape: "flat", orient: "palmDown", at: { x: -0.2, y: -1.1 } };
   const s = summarize(
     movement(
       [
-        { at: 0, D: { shape: 'index', at: { x: 0.35, y: 0.3 } }, N: rest },
-        { at: 0.5, D: { shape: 'index', at: { x: 0.3, y: 0.08 } }, N: rest },
-        { at: 1, D: { shape: 'index', at: { x: 0.12, y: -0.08 } }, N: rest },
+        { at: 0, D: { shape: "index", at: { x: 0.35, y: 0.3 } }, N: rest },
+        { at: 0.5, D: { shape: "index", at: { x: 0.3, y: 0.08 } }, N: rest },
+        { at: 1, D: { shape: "index", at: { x: 0.12, y: -0.08 } }, N: rest },
       ],
       { ms: 600 },
     ),
   );
   const r = scoreMotionKana(s)[0];
-  assert.equal(r.label, 'の');
+  assert.equal(r.label, "の");
   assert.ok(r.score >= 0.6, String(r.score));
+});
+
+// Found on real signing footage (tests/realdata): one failed condition must
+// not be outvoted by the others, and 元気 fired on big face-to-waist sweeps.
+test("all(): a single failed condition keeps the score below acceptance", () => {
+  assert.ok(all(1, 1, 1, 1, 0.1) < 0.3, String(all(1, 1, 1, 1, 0.1)));
+  assert.ok(all(1, 1, 1, 1, 1) === 1);
+  assert.ok(all(0.8, 0.9, 0.7) > 0.75);
+});
+
+test("元気 is not read from a large vertical sweep", () => {
+  const sweep = (w) => ({
+    x: 0,
+    y: -1.2 * Math.abs(Math.sin(2 * Math.PI * w)),
+  });
+  const seg = summarize(WORD_MOVES["元気"]({ wiggle: sweep, wiggleN: sweep }));
+  const g = scoreWords(seg).find((s) => s.label === "元気").score;
+  assert.ok(g < 0.6, `元気 scored ${g.toFixed(2)} on a sweep`);
 });

@@ -11,9 +11,20 @@ const d2 = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const meanPt = (a) =>
   a.length ? { x: mean(a.map((p) => p.x)), y: mean(a.map((p) => p.y)) } : null;
-/** Weighted geometric mean of memberships: every condition must hold to score high. */
-const all = (...ms) =>
-  Math.exp(mean(ms.map((m) => Math.log(Math.max(1e-4, m)))));
+/**
+ * Every condition must hold to score high. A plain geometric mean is
+ * compensatory: with five conditions one failed term (0.1) still gives 0.63,
+ * above the acceptance threshold, and on real signing that let words fire
+ * with the wrong handshape or in the wrong place. The weakest condition
+ * therefore also caps the score.
+ */
+// 0.15–0.4 was chosen on half of the real clips (tests/realdata) and checked
+// on the other half; 0.2–0.5 already breaks synthetic word recognition.
+const VETO_LO = 0.15;
+const VETO_HI = 0.4;
+export const all = (...ms) =>
+  Math.exp(mean(ms.map((m) => Math.log(Math.max(1e-4, m))))) *
+  ramp(Math.min(...ms), VETO_LO, VETO_HI);
 
 /** Count direction reversals along one axis with hysteresis (amplitude in SW). */
 export function reversals(values, amp) {
@@ -316,6 +327,8 @@ export const WORD_RULES = [
             near(D.meanPos, P.chest, 0.8),
             ramp(reversals(D.ys, 0.08), 0.5, 2),
             ramp(D.rangeY - D.rangeX, -0.05, 0.1),
+            // Short strokes in front of the chest, not big sweeps from face to waist.
+            1 - ramp(D.rangeY, 0.7, 1.1),
             // Not お疲れ様: the other hand moves too, or the fist is away from its wrist.
             N.ok
               ? Math.max(
