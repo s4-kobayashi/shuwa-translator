@@ -2,6 +2,8 @@
 
 Webカメラに映った手話をブラウザの中で読み取り、映像の上に字幕として表示するアプリです。読み取った内容は記録として残り、テキスト・表(CSV)・字幕(SRT)・JSON でダウンロードできます。字幕を焼き込んだ録画も保存できます。
 
+**使う: https://s4-kobayashi.github.io/shuwa-translator/**
+
 PC(Chrome / Edge / Safari)とスマホ(Android の Chrome、iPhone の Safari)で動きます。サーバーは不要で、GitHub Pages の URL を開くだけで使えます。カメラの映像は端末の中だけで処理され、外部には送信されません。
 
 ## 何が読めるか
@@ -73,6 +75,12 @@ uv run scripts/serve.py 8099 .
 
 ```bash
 node tests/e2e/run.mjs --prefix shuwa
+```
+
+公開中のサイトをそのまま確認するときは `--url` を付けます。
+
+```bash
+node tests/e2e/run.mjs --url https://s4-kobayashi.github.io/shuwa-translator/
 ```
 
 URL に `?test=1` を付けると、テスト用に `window.__shuwa`(合成した特徴量を流し込む口と状態の読み出し)が有効になります。通常の利用には影響しません。

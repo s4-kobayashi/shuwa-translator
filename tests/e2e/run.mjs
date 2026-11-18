@@ -2,16 +2,19 @@
 // fake camera. Recognition input is injected through the ?test=1 hook with
 // synthetic feature frames, while MediaPipe runs on the fake camera stream.
 //
-// Usage: node tests/e2e/run.mjs [camera.y4m] [--prefix repo-name]
+// Usage: node tests/e2e/run.mjs [camera.y4m] [--prefix repo-name] [--url https://…/]
 //   camera.y4m  optional video for the fake camera (a person with visible hands
 //               lets the run also check real hand detection)
 //   --prefix    serve under /<prefix>/ like a GitHub Pages project site
+//   --url       test a deployed site instead of the local server
 import { readFileSync } from "node:fs";
 import { startServer, launch, newPage } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 const pi = args.indexOf("--prefix");
 const prefix = pi >= 0 ? args.splice(pi, 2)[1] : "";
+const ui = args.indexOf("--url");
+const remoteUrl = ui >= 0 ? args.splice(ui, 2)[1] : "";
 const y4m = args[0];
 
 const results = [];
@@ -22,12 +25,20 @@ const check = (name, ok, detail = "") => {
   );
 };
 
-const server = await startServer({ port: 8125, prefix });
+// --url tests an already deployed copy (e.g. the GitHub Pages site) instead
+// of starting the local server; 404s are then collected from the browser.
+const server = remoteUrl
+  ? { url: remoteUrl.replace(/\/?$/, "/"), notFound: [], stop() {} }
+  : await startServer({ port: 8125, prefix });
 const browser = await launch({ y4m });
 let exitCode = 0;
 try {
   const origin = new URL(server.url).origin;
   const { page, consoleErrors, context } = await newPage(browser, { origin });
+  if (remoteUrl)
+    page.on("response", (r) => {
+      if (r.status() === 404) server.notFound.push(r.url());
+    });
   await page.goto(server.url + "?test=1");
   await page.click("#start");
   await page.waitForFunction(() => window.__shuwa?.state().running, null, {
