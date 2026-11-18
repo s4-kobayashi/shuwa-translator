@@ -8,6 +8,12 @@
 //   file    video path (relative paths resolve against the manifest's folder)
 //   expect  what is signed, in order, as the app should write it ("たなか ありがとう").
 //           Use "" for signs outside the vocabulary: the right output is nothing.
+//   name    optional label for the report
+//   start, end  optional trim in seconds (several entries can share one file)
+//   crop    optional ffmpeg crop "w:h:x:y", to frame the signer like a webcam would
+//
+// Each row also has a timeline: every transcript change with the clip time (s)
+// it appeared at, to line captions up with the video's own subtitles.
 //
 // Needs ffmpeg/ffprobe on PATH. Videos are converted to .y4m in the OS temp
 // folder; nothing is uploaded.
@@ -51,8 +57,12 @@ function probeDuration(file) {
   return d;
 }
 
-function toY4m(file, out) {
+function toY4m(file, out, { start, end, crop } = {}) {
+  const trim = [];
+  if (start != null) trim.push("-ss", String(start));
+  if (end != null) trim.push("-to", String(end));
   const vf = [
+    ...(crop ? [`crop=${crop}`] : []),
     "scale=640:-2",
     "fps=30",
     `tpad=start_duration=${LEAD_S}:start_mode=add:color=gray`,
@@ -60,7 +70,7 @@ function toY4m(file, out) {
   ].join(",");
   const r = spawnSync(
     "ffmpeg",
-    ["-v", "error", "-y", "-i", file, "-an", "-vf", vf, out],
+    ["-v", "error", "-y", ...trim, "-i", file, "-an", "-vf", vf, out],
     {
       encoding: "utf8",
     },
@@ -95,9 +105,11 @@ try {
   for (const item of manifest) {
     const file = resolve(base, item.file);
     const expect = item.expect ?? "";
-    const dur = probeDuration(file);
-    const y4m = join(work, basename(file).replace(/\.[^.]+$/, "") + ".y4m");
-    toY4m(file, y4m);
+    const full = probeDuration(file);
+    const dur = Math.min(item.end ?? full, full) - (item.start ?? 0);
+    const y4m = join(work, `clip${rows.length}.y4m`);
+    toY4m(file, y4m, item);
+    const timeline = [];
 
     // One browser per clip: the fake camera file is a launch argument.
     const browser = await launch({ y4m });
@@ -123,11 +135,26 @@ try {
         window.__shuwa.releaseFeed();
       });
       // The fake camera loops the file: stop before it starts again.
-      const endAt = t0 + LEAD_S * 1000 + dur * 1000 + TAIL_MS;
-      await page.waitForTimeout(Math.max(0, endAt - Date.now()));
+      const clipAt = t0 + LEAD_S * 1000;
+      const endAt = clipAt + dur * 1000 + TAIL_MS;
+      let last = "";
+      while (Date.now() < endAt) {
+        const text = await page.evaluate(() => {
+          const s = window.__shuwa.state();
+          return s.lines.join(" / ");
+        });
+        if (text !== last) {
+          timeline.push({
+            t: +((Date.now() - clipAt) / 1000 + (item.start ?? 0)).toFixed(1),
+            text,
+          });
+          last = text;
+        }
+        await page.waitForTimeout(150);
+      }
       const s = await page.evaluate(() => window.__shuwa.state());
       got = s.lines.join(" ").trim();
-      detail = { detStats: s.detStats, consoleErrors };
+      detail = { detStats: s.detStats, consoleErrors, tokens: s.tokens };
       await context.close();
     } finally {
       await browser.close();
@@ -135,17 +162,19 @@ try {
     }
     const dist = editDistance(norm(expect), norm(got));
     const row = {
-      file: item.file,
+      file: item.name ?? item.file,
       expect,
       got,
       exact: norm(expect) === norm(got),
       errors: dist,
       chars: [...norm(expect)].length,
       handFrames: `${detail.detStats?.handFrames}/${detail.detStats?.frames}`,
+      timeline,
+      tokens: detail.tokens,
     };
     rows.push(row);
     console.log(
-      `${row.exact ? "OK  " : "MISS"}  ${item.file}  expect="${expect}"  got="${got}"  hands=${row.handFrames}`,
+      `${row.exact ? "OK  " : "MISS"}  ${row.file}  expect="${expect}"  got="${got}"  hands=${row.handFrames}`,
     );
   }
 } finally {

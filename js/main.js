@@ -155,7 +155,10 @@ function changed(flash = false) {
         .then(renderHistory)
         .catch((err) => {
           console.warn(err);
-          setStatus("記録をこの端末に保存できませんでした(空き容量やブラウザの設定を確認してください)。ダウンロードで保存できます。", true);
+          setStatus(
+            "記録をこの端末に保存できませんでした(空き容量やブラウザの設定を確認してください)。ダウンロードで保存できます。",
+            true,
+          );
         }),
     600,
   );
@@ -569,7 +572,14 @@ function editLine(li, i) {
     const v = input.value.trim();
     if (v)
       session.lines[i] = [
-        { text: v, kind: "word", t: line[0].t, at: line[0].at, conf: 1, source: "edit" },
+        {
+          text: v,
+          kind: "word",
+          t: line[0].t,
+          at: line[0].at,
+          conf: 1,
+          source: "edit",
+        },
       ];
     else session.lines.splice(i, 1);
     afterLineEdit(wasLast);
@@ -910,6 +920,9 @@ if (TEST) {
       running,
       detStats: { ...detStats, fps, delegate: detector?.delegate },
       lines: sessionLines(session).map(lineText),
+      tokens: sessionLines(session)
+        .flat()
+        .map((tk) => ({ text: tk.text, kind: tk.kind, conf: tk.conf })),
       caption: capText.textContent,
       pending: capPendingText.textContent,
       signs: userSigns.map((s) => ({
