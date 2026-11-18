@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>手話翻訳</title>
+    <meta
+      name="description"
+      content="Webカメラに映った手話(指文字と基本の単語)をブラウザ内で読み取り、映像の上に字幕として表示・記録するアプリ。映像は端末の外に送信されません。"
+    />
+    <meta name="theme-color" content="#16181D" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2316181D'/%3E%3Crect x='12' y='44' width='40' height='6' rx='3' fill='%23FFD23F'/%3E%3Ctext x='32' y='37' font-size='28' text-anchor='middle' fill='%23fff' font-family='sans-serif' font-weight='700'%3E%E6%89%8B%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="css/app.css" />
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#panel">記録へ移動</a>
+    <header class="top">
+      <h1 class="brand">手話翻訳</h1>
+      <p class="top-note">映像は端末の中だけで処理され、外部に送信されません</p>
+    </header>
+
+    <main class="layout">
+      <section class="stage-col" aria-label="カメラと字幕">
+        <div class="stage" id="stage">
+          <video id="video" muted playsinline aria-hidden="true"></video>
+          <canvas id="skeleton" aria-hidden="true"></canvas>
+
+          <div class="stage-intro" id="intro">
+            <p class="intro-lead">
+              カメラに上半身と両手が映るようにして、手話をしてください。
+            </p>
+            <p class="intro-sub">
+              読み取れるのは指文字 46 字と、あいさつなど約 20
+              語です。その他の手話は「辞書」で登録できます。
+            </p>
+            <button class="btn btn-primary btn-large" id="start" type="button">
+              カメラを開始
+            </button>
+            <p class="intro-error" id="intro-error" role="alert" hidden></p>
+          </div>
+
+          <p class="stage-status" id="status" aria-live="polite"></p>
+          <div class="banner" id="banner" hidden></div>
+          <ol
+            class="candidates"
+            id="candidates"
+            aria-label="認識の候補と信頼度"
+          ></ol>
+
+          <div
+            class="captions"
+            id="captions"
+            aria-live="polite"
+            aria-atomic="false"
+          >
+            <p class="cap-prev" id="cap-prev"></p>
+            <p class="cap-line">
+              <span id="cap-text"></span
+              ><span class="cap-pending" id="cap-pending"
+                ><span class="cap-pending-text" id="cap-pending-text"></span
+                ><span class="gauge" aria-hidden="true"
+                  ><span class="gauge-fill" id="gauge"></span></span
+              ></span>
+            </p>
+          </div>
+        </div>
+
+        <div class="controls" id="controls" aria-label="操作">
+          <button class="btn btn-primary" id="toggle" type="button" disabled>
+            一時停止
+          </button>
+          <button class="btn" id="undo" type="button">1つ戻す</button>
+          <button class="btn" id="break" type="button">改行</button>
+          <button
+            class="btn btn-rec"
+            id="rec"
+            type="button"
+            disabled
+            aria-pressed="false"
+          >
+            録画
+          </button>
+          <button class="btn" id="flip" type="button" hidden>カメラ切替</button>
+        </div>
+      </section>
+
+      <section class="panel" id="panel" aria-label="記録と設定">
+        <div class="tabs" role="tablist" aria-label="表示の切り替え">
+          <button
+            role="tab"
+            id="tab-log"
+            aria-controls="pane-log"
+            aria-selected="true"
+          >
+            記録
+          </button>
+          <button
+            role="tab"
+            id="tab-dict"
+            aria-controls="pane-dict"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            辞書
+          </button>
+          <button
+            role="tab"
+            id="tab-settings"
+            aria-controls="pane-settings"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            設定
+          </button>
+          <button
+            role="tab"
+            id="tab-help"
+            aria-controls="pane-help"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            使い方
+          </button>
+        </div>
+
+        <!-- 記録 -->
+        <div
+          class="pane"
+          role="tabpanel"
+          id="pane-log"
+          aria-labelledby="tab-log"
+        >
+          <div class="pane-head">
+            <h2>この記録</h2>
+            <p class="meta" id="session-meta"></p>
+          </div>
+          <ol class="transcript" id="transcript"></ol>
+          <p class="empty" id="transcript-empty">
+            まだ何も読み取っていません。字幕が確定すると、ここに 1
+            行ずつ残ります。
+          </p>
+
+          <h3 class="sub">ダウンロード</h3>
+          <div class="downloads">
+            <button class="btn" type="button" data-dl="txt">
+              テキスト (.txt)
+            </button>
+            <button class="btn" type="button" data-dl="csv">表 (.csv)</button>
+            <button class="btn" type="button" data-dl="srt">字幕 (.srt)</button>
+            <button class="btn" type="button" data-dl="json">
+              データ (.json)
+            </button>
+          </div>
+          <div class="video-dl" id="video-dl" hidden>
+            <p>字幕入りの録画ができました。</p>
+            <a class="btn btn-primary" id="video-link" download>録画を保存</a>
+            <button class="btn" type="button" id="srt-video">
+              録画に合わせた字幕 (.srt)
+            </button>
+          </div>
+          <button class="btn btn-quiet" type="button" id="new-session">
+            新しい記録を始める
+          </button>
+
+          <h3 class="sub">過去の記録</h3>
+          <ul class="history" id="history"></ul>
+          <p class="empty" id="history-empty">
+            保存された記録はまだありません。記録はこの端末のブラウザに自動で保存されます。
+          </p>
+        </div>
+
+        <!-- 辞書 -->
+        <div
+          class="pane"
+          role="tabpanel"
+          id="pane-dict"
+          aria-labelledby="tab-dict"
+          hidden
+        >
+          <div class="pane-head">
+            <h2>自分の手話を登録</h2>
+          </div>
+          <p class="lead">
+            組込みにない手話や、自分の表し方を登録できます。同じ動きを 3
+            回以上見せると、次からその名前で字幕になります。組込みと同じ名前で登録すると、登録した方が優先されます。
+          </p>
+          <form class="register" id="register">
+            <label for="reg-label">字幕に出す言葉</label>
+            <input
+              id="reg-label"
+              name="label"
+              type="text"
+              maxlength="30"
+              required
+              placeholder="例: 手話"
+            />
+            <fieldset>
+              <legend>種類</legend>
+              <label
+                ><input type="radio" name="kind" value="auto" checked />
+                自動で判断</label
+              >
+              <label
+                ><input type="radio" name="kind" value="static" />
+                形だけ(止める)</label
+              >
+              <label
+                ><input type="radio" name="kind" value="motion" />
+                動きあり</label
+              >
+            </fieldset>
+            <button class="btn btn-primary" type="submit" id="reg-start">
+              見本を記録する
+            </button>
+          </form>
+          <div class="reg-progress" id="reg-progress" hidden>
+            <p id="reg-msg" aria-live="polite"></p>
+            <div class="reg-actions">
+              <button
+                class="btn btn-primary"
+                type="button"
+                id="reg-save"
+                disabled
+              >
+                登録する
+              </button>
+              <button class="btn" type="button" id="reg-cancel">やめる</button>
+            </div>
+          </div>
+
+          <h3 class="sub">登録した手話</h3>
+          <ul class="signs" id="signs"></ul>
+          <p class="empty" id="signs-empty">登録した手話はまだありません。</p>
+          <div class="downloads">
+            <button class="btn" type="button" id="dict-export">
+              辞書を書き出す
+            </button>
+            <label class="btn" for="dict-import">辞書を読み込む</label>
+            <input
+              class="visually-hidden"
+              type="file"
+              id="dict-import"
+              accept="application/json,.json"
+            />
+          </div>
+          <p class="meta" id="dict-msg" role="status"></p>
+        </div>
+
+        <!-- 設定 -->
+        <div
+          class="pane"
+          role="tabpanel"
+          id="pane-settings"
+          aria-labelledby="tab-settings"
+          hidden
+        >
+          <div class="pane-head"><h2>設定</h2></div>
+          <form class="settings" id="settings">
+            <fieldset>
+              <legend>利き手</legend>
+              <label
+                ><input type="radio" name="dominant" value="right" checked />
+                右手</label
+              >
+              <label
+                ><input type="radio" name="dominant" value="left" /> 左手</label
+              >
+            </fieldset>
+            <fieldset>
+              <legend>読み取る対象</legend>
+              <label
+                ><input type="radio" name="mode" value="auto" checked />
+                指文字と単語</label
+              >
+              <label
+                ><input type="radio" name="mode" value="kana" />
+                指文字だけ</label
+              >
+              <label
+                ><input type="radio" name="mode" value="word" /> 単語だけ</label
+              >
+            </fieldset>
+            <div class="field">
+              <label for="holdMs"
+                >確定までの時間 <output id="holdMs-out" for="holdMs"></output
+              ></label>
+              <input
+                type="range"
+                id="holdMs"
+                name="holdMs"
+                min="250"
+                max="1000"
+                step="50"
+              />
+              <p class="hint">
+                手の形をこの時間止めると字幕が確定します。誤って確定するときは長く、遅いと感じたら短くします。
+              </p>
+            </div>
+            <div class="field">
+              <label for="sensitivity"
+                >読み取りの積極さ
+                <output id="sensitivity-out" for="sensitivity"></output
+              ></label>
+              <input
+                type="range"
+                id="sensitivity"
+                name="sensitivity"
+                min="0"
+                max="1"
+                step="0.05"
+              />
+              <p class="hint">
+                低いほど自信のあるときだけ字幕にします(間違いが減り、見落としが増えます)。
+              </p>
+            </div>
+            <fieldset>
+              <legend>表示</legend>
+              <label
+                ><input type="checkbox" name="skeleton" checked />
+                手と体の骨格を表示</label
+              >
+              <label
+                ><input type="checkbox" name="mirror" checked />
+                映像を鏡のように反転(前面カメラ)</label
+              >
+              <label><input type="checkbox" name="candidates" checked /> 認識の候補と信頼度を映像に表示</label>
+              <label><input type="checkbox" name="diag" /> 動作状況(fps など)を表示</label>
+            </fieldset>
+          </form>
+        </div>
+
+        <!-- 使い方 -->
+        <div
+          class="pane help"
+          role="tabpanel"
+          id="pane-help"
+          aria-labelledby="tab-help"
+          hidden
+        >
+          <div class="pane-head"><h2>使い方</h2></div>
+          <ol class="steps">
+            <li>
+              「カメラを開始」を押し、カメラを許可します。頭から腰までと両手が映る距離(1〜1.5
+              m)が目安です。
+            </li>
+            <li>
+              指文字は、手の形を止めると黄色い字と下線のゲージが出ます。ゲージが満ちると白い字幕に確定します。
+            </li>
+            <li>
+              同じ字を続けるときは、いったん手を下ろすか、少し動かしてからもう一度形を作ります。
+            </li>
+            <li>
+              単語は動作の終わりで読み取ります。動いたあと手を一瞬止めてください。
+            </li>
+            <li>
+              手を 2
+              秒ほど下ろすと改行します。字幕は「記録」に残り、テキスト・表・字幕ファイルで保存できます。
+            </li>
+          </ol>
+          <h3 class="sub">読み取れる単語</h3>
+          <dl class="vocab" id="vocab-words"></dl>
+          <h3 class="sub">指文字</h3>
+          <dl class="kana-grid" id="vocab-kana"></dl>
+          <dl class="vocab" id="vocab-mods"></dl>
+          <h3 class="sub">精度について</h3>
+          <p>
+            このアプリは手の 21
+            点と体の位置から形と動きを判定します。手の形が隠れる角度、暗い部屋、速すぎる動きでは読み違えます。手話は地域や人によって表し方が違うため、読めないときは「辞書」で自分の手話を登録してください。表情や文法を含む文の翻訳には対応していません。
+          </p>
+          <p class="meta">
+            組込み語彙の根拠(自治体の手話資料など)はリポジトリの
+            docs/vocabulary.md にあります。
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

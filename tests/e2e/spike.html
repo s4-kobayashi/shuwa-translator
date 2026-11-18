@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>detector spike</title>
+  </head>
+  <body>
+    <video id="v" playsinline muted autoplay></video>
+    <pre id="out">starting</pre>
+    <script type="module">
+      import { createDetector } from "../../js/detector.js";
+      const out = document.getElementById("out");
+      const v = document.getElementById("v");
+      const stats = {
+        frames: 0,
+        handFrames: 0,
+        maxHands: 0,
+        poseFrames: 0,
+        ms: 0,
+        errors: [],
+        samples: [],
+      };
+      window.__spike = stats;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+        });
+        v.srcObject = stream;
+        await v.play();
+        const det = await createDetector({
+          onStatus: (m) => (out.textContent = m),
+        });
+        stats.delegate = det.delegate;
+        stats.hasPose = det.hasPose;
+        const t0 = performance.now();
+        const loop = () => {
+          if (v.readyState >= 2) {
+            const a = performance.now();
+            const r = det.detect(v, performance.now());
+            stats.ms += performance.now() - a;
+            stats.frames++;
+            if (r.hands.length) stats.handFrames++;
+            stats.maxHands = Math.max(stats.maxHands, r.hands.length);
+            if (r.pose) stats.poseFrames++;
+            if ((r.hands.length || r.pose) && stats.samples.length < 400) {
+              stats.samples.push({
+                t: performance.now() - t0,
+                hands: r.hands.map((h) => ({
+                  label: h.label,
+                  landmarks: h.landmarks,
+                  world: h.world,
+                })),
+                pose: r.pose,
+              });
+            }
+            stats.fps = stats.frames / ((performance.now() - t0) / 1000);
+            out.textContent = JSON.stringify({
+              ...stats,
+              samples: stats.samples.length,
+            });
+          }
+          requestAnimationFrame(loop);
+        };
+        loop();
+      } catch (e) {
+        stats.errors.push(String((e && e.stack) || e));
+        out.textContent = "ERROR " + e;
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "shuwa-honyaku",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ブラウザだけで動く手話翻訳システム(MediaPipe + 端末内認識)",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/",
+    "e2e": "node tests/e2e/run.mjs",
+    "vendor": "node scripts/fetch-vendor.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.59.1"
+  }
+}
